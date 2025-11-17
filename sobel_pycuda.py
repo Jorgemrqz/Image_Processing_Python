@@ -10,6 +10,9 @@ from time import perf_counter
 print("=== Sobel PyCUDA (GPU) ===")
 
 
+# ------------------------------------
+# Generar máscara Sobel dinámica
+# ------------------------------------
 def generar_mascara_sobel(n):
     c = n // 2
     Kx = np.zeros((n, n), dtype=np.float32)
@@ -21,6 +24,9 @@ def generar_mascara_sobel(n):
     return Kx, Ky
 
 
+# ------------------------------------
+# Kernels CUDA Sobel
+# ------------------------------------
 kernel_code = """
 __global__ void sobel_mag(
     unsigned char *img,
@@ -85,7 +91,7 @@ normalize_gpu = mod.get_function("normalize_mag")
 
 
 def main():
-    print("=== Sobel Dinámico PyCUDA (Preparación) ===")
+    print("=== Sobel Dinámico PyCUDA (Cálculo de Magnitud) ===")
 
     n = int(input("Tamaño de máscara (impar): "))
     if n % 2 == 0:
@@ -101,15 +107,43 @@ def main():
     Kx_flat = Kx.reshape(-1).astype(np.float32)
     Ky_flat = Ky.reshape(-1).astype(np.float32)
 
-    mag_gpu = drv.mem_alloc(gray.size * 4)
-    out_gpu = drv.mem_alloc(gray.size)
+    # Reservar memoria GPU
+    mag_gpu = drv.mem_alloc(gray.size * 4)   # float32
+    out_gpu = drv.mem_alloc(gray.size)       # uint8
 
+    # Configuración CUDA
     block = (16, 16, 1)
     grid = ((W + 15) // 16, (H + 15) // 16, 1)
 
-    print("Buffers y configuración GPU listos.")
+    # -------------------------------
+    # KERNEL 1: calcular magnitud
+    # -------------------------------
+    t0 = perf_counter()
+    sobel_mag_gpu(
+        drv.In(gray),
+        mag_gpu,
+        drv.In(Kx_flat),
+        drv.In(Ky_flat),
+        np.int32(W),
+        np.int32(H),
+        np.int32(n),
+        block=block, grid=grid
+    )
+    t1 = perf_counter()
+
+    print(f"Tiempo cálculo magnitud GPU: {(t1 - t0)*1000:.2f} ms")
+
+    # Descargar magnitudes para normalización
+    mag_host = np.empty_like(gray, dtype=np.float32)
+    drv.memcpy_dtoh(mag_host, mag_gpu)
+
+    # Para normalización futura
+    max_val = float(mag_host.max())
+    if max_val == 0:
+        max_val = 1.0
+
+    print("Magnitud calculada correctamente. Listo para normalizar.")
 
 
 if __name__ == "__main__":
     main()
-    
