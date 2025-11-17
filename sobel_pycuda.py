@@ -91,7 +91,7 @@ normalize_gpu = mod.get_function("normalize_mag")
 
 
 def main():
-    print("=== Sobel Dinámico PyCUDA (Cálculo de Magnitud) ===")
+    print("=== Sobel Dinámico PyCUDA (Normalización completa) ===")
 
     n = int(input("Tamaño de máscara (impar): "))
     if n % 2 == 0:
@@ -102,8 +102,8 @@ def main():
     gray = np.array(img).astype(np.uint8)
     H, W = gray.shape
 
+    # Generar máscaras
     Kx, Ky = generar_mascara_sobel(n)
-
     Kx_flat = Kx.reshape(-1).astype(np.float32)
     Ky_flat = Ky.reshape(-1).astype(np.float32)
 
@@ -131,18 +131,37 @@ def main():
     )
     t1 = perf_counter()
 
-    print(f"Tiempo cálculo magnitud GPU: {(t1 - t0)*1000:.2f} ms")
+    print(f"Tiempo magnitud GPU: {(t1 - t0)*1000:.2f} ms")
 
-    # Descargar magnitudes para normalización
+    # Descargar magnitud para obtener max_val
     mag_host = np.empty_like(gray, dtype=np.float32)
     drv.memcpy_dtoh(mag_host, mag_gpu)
 
-    # Para normalización futura
     max_val = float(mag_host.max())
     if max_val == 0:
         max_val = 1.0
 
-    print("Magnitud calculada correctamente. Listo para normalizar.")
+    # -------------------------------
+    # KERNEL 2: normalizar 0–255
+    # -------------------------------
+    normalize_gpu(
+        drv.In(mag_host),
+        out_gpu,
+        np.float32(max_val),
+        np.int32(W),
+        np.int32(H),
+        block=block, grid=grid
+    )
+
+    # Obtener imagen final normalizada
+    out_host = np.empty_like(gray)
+    drv.memcpy_dtoh(out_host, out_gpu)
+
+    out_img = Image.fromarray(out_host)
+    filename = f"sobel_gpu_{n}x{n}.jpg"
+    out_img.save(filename)
+
+    print("Imagen guardada:", filename)
 
 
 if __name__ == "__main__":
