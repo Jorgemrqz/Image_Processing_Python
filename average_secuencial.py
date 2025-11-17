@@ -25,3 +25,45 @@ def cargar_imagen_gris(ruta):
             gray[y][x] = pix[x, y]
 
     return gray, w, h
+
+
+# -------------------------------------------------
+# Filtro promedio Python puro
+# -------------------------------------------------
+def promedio_puro(gray, kernel):
+    n = len(kernel)
+    pad = n // 2
+
+    h = len(gray)
+    w = len(gray[0])
+
+    # Crear imagen con padding
+    ph = h + 2 * pad
+    pw = w + 2 * pad
+    padded = [[0.0 for _ in range(pw)] for _ in range(ph)]
+
+    # Copiar con borde repetido
+    for y in range(ph):
+        for x in range(pw):
+            yy = min(max(y - pad, 0), h - 1)
+            xx = min(max(x - pad, 0), w - 1)
+            padded[y][x] = float(gray[yy][xx])
+
+    # Aplicar convolución
+    salida = Image.new("L", (w, h))
+    out = salida.load()
+
+    for y in range(h):
+        for x in range(w):
+            suma = 0.0
+            for i in range(n):
+                for j in range(n):
+                    suma += padded[y + i][x + j] * kernel[i][j]
+
+            # Clamp
+            val = int(suma)
+            if val < 0: val = 0
+            if val > 255: val = 255
+            out[x, y] = val
+
+    return salida
