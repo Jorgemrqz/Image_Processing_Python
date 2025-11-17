@@ -54,6 +54,44 @@ def convolve_vertical(src: List[List[float]], w: int, h: int, k: List[float]) ->
             out[y][x] = acc
     return out
 
+def image_to_planes(img: Image.Image) -> Tuple[List[List[float]], List[List[float]], List[List[float]], Optional[List[List[float]]]]:
+    w, h = img.size
+    pixels = img.load()
+    R = [[0.0] * w for _ in range(h)]
+    G = [[0.0] * w for _ in range(h)]
+    B = [[0.0] * w for _ in range(h)]
+    A = [[0.0] * w for _ in range(h)] if img.mode == "RGBA" else None
+
+    for y in range(h):
+        for x in range(w):
+            px = pixels[x, y]
+            if img.mode == "RGBA":
+                r, g, b, a = px
+                A[y][x] = float(a)
+            else:
+                r, g, b = px
+            R[y][x] = float(r)
+            G[y][x] = float(g)
+            B[y][x] = float(b)
+    return R, G, B, A
+
+def planes_to_image(R: List[List[float]], G: List[List[float]], B: List[List[float]], A: Optional[List[List[float]]]) -> Image.Image:
+    h = len(R)
+    w = len(R[0]) if h > 0 else 0
+    out = Image.new("RGBA" if A is not None else "RGB", (w, h))
+    pix = out.load()
+    for y in range(h):
+        for x in range(w):
+            r = int(R[y][x] + 0.5); r = 0 if r < 0 else 255 if r > 255 else r
+            g = int(G[y][x] + 0.5); g = 0 if g < 0 else 255 if g > 255 else g
+            b = int(B[y][x] + 0.5); b = 0 if b < 0 else 255 if b > 255 else b
+            if A is not None:
+                a = int(A[y][x] + 0.5); a = 0 if a < 0 else 255 if a > 255 else a
+                pix[x, y] = (r, g, b, a)
+            else:
+                pix[x, y] = (r, g, b)
+    return out
+
 def main():
     ap = argparse.ArgumentParser(description="Gaussian Blur separable (puro Python + Pillow, sin NumPy).")
     ap.add_argument("input", help="Ruta de la imagen de entrada")
