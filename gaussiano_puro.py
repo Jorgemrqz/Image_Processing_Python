@@ -100,7 +100,39 @@ def main():
     ap.add_argument("--output", default=None, help="Ruta de salida")
     args = ap.parse_args()
 
-    # TODO: implementar filtro gaussiano
+    img = Image.open(args.input)
+    if img.mode not in ("RGB", "RGBA"):
+        img = img.convert("RGBA")
+
+    w, h = img.size
+    R, G, B, A = image_to_planes(img)
+
+    sigma = None if args.sigma <= 0 else args.sigma
+    k = gaussian_kernel_1d(args.mask, sigma)
+
+    t0 = perf_counter()
+
+    R_h = convolve_horizontal(R, w, h, k)
+    R_v = convolve_vertical(R_h, w, h, k)
+
+    G_h = convolve_horizontal(G, w, h, k)
+    G_v = convolve_vertical(G_h, w, h, k)
+
+    B_h = convolve_horizontal(B, w, h, k)
+    B_v = convolve_vertical(B_h, w, h, k)
+
+    t1 = perf_counter()
+
+    out_img = planes_to_image(R_v, G_v, B_v, A)
+    out_path = args.output or (args.input.rsplit(".", 1)[0] + f"_gauss_purepy_k{len(k)}.png")
+    out_img.save(out_path)
+
+    print("\n--- RESUMEN (Python puro) ---")
+    print(f"Tamaño de imagen: {w}x{h}px")
+    print(f"Máscara: {len(k)} x {len(k)} (separable)")
+    print(f"Sigma: {sigma if sigma is not None else f'(derivado => {(len(k)-1)//2}/3)'}")
+    print(f"Tiempo SOLO CPU (loops Python): {t1 - t0:.6f} s")
+    print(f"Salida: {out_path}")
 
 if __name__ == "__main__":
     main()
