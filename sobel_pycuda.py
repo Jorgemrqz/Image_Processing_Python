@@ -85,7 +85,31 @@ normalize_gpu = mod.get_function("normalize_mag")
 
 
 def main():
-    print("Kernels compilados.")
+    print("=== Sobel Dinámico PyCUDA (Preparación) ===")
+
+    n = int(input("Tamaño de máscara (impar): "))
+    if n % 2 == 0:
+        n = 3
+        print("Usando 3x3.")
+
+    img = Image.open("original.jpg").convert("L")
+    gray = np.array(img).astype(np.uint8)
+    H, W = gray.shape
+
+    Kx, Ky = generar_mascara_sobel(n)
+
+    Kx_flat = Kx.reshape(-1).astype(np.float32)
+    Ky_flat = Ky.reshape(-1).astype(np.float32)
+
+    mag_gpu = drv.mem_alloc(gray.size * 4)
+    out_gpu = drv.mem_alloc(gray.size)
+
+    block = (16, 16, 1)
+    grid = ((W + 15) // 16, (H + 15) // 16, 1)
+
+    print("Buffers y configuración GPU listos.")
+
 
 if __name__ == "__main__":
     main()
+    
