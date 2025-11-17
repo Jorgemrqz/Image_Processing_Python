@@ -28,6 +28,32 @@ def clamp(v: int, lo: int, hi: int) -> int:
     if v > hi: return hi
     return v
 
+def convolve_horizontal(src: List[List[float]], w: int, h: int, k: List[float]) -> List[List[float]]:
+    kr = len(k) // 2
+    out = [[0.0] * w for _ in range(h)]
+    for y in range(h):
+        row = src[y]
+        dst_row = out[y]
+        for x in range(w):
+            acc = 0.0
+            for t in range(-kr, kr + 1):
+                xx = clamp(x + t, 0, w - 1)
+                acc += row[xx] * k[t + kr]
+            dst_row[x] = acc
+    return out
+
+def convolve_vertical(src: List[List[float]], w: int, h: int, k: List[float]) -> List[List[float]]:
+    kr = len(k) // 2
+    out = [[0.0] * w for _ in range(h)]
+    for x in range(w):
+        for y in range(h):
+            acc = 0.0
+            for t in range(-kr, kr + 1):
+                yy = clamp(y + t, 0, h - 1)
+                acc += src[yy][x] * k[t + kr]
+            out[y][x] = acc
+    return out
+
 def main():
     ap = argparse.ArgumentParser(description="Gaussian Blur separable (puro Python + Pillow, sin NumPy).")
     ap.add_argument("input", help="Ruta de la imagen de entrada")
