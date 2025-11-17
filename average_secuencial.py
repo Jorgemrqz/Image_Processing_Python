@@ -1,5 +1,9 @@
 # promedio_secuencial_puro.py
 from PIL import Image
+from time import perf_counter
+import warnings
+
+warnings.simplefilter("ignore", Image.DecompressionBombWarning)
 
 # -------------------------------------------------
 # Generar kernel promedio NxN (todo 1/(n*n))
@@ -10,6 +14,7 @@ def generar_kernel_promedio(n):
     val = 1.0 / (n * n)
     kernel = [[val for _ in range(n)] for _ in range(n)]
     return kernel
+
 
 # -------------------------------------------------
 # Cargar imagen como matriz 2D (gray[y][x])
@@ -67,3 +72,36 @@ def promedio_puro(gray, kernel):
             out[x, y] = val
 
     return salida
+
+# -------------------------------------------------
+# Programa principal
+# -------------------------------------------------
+if __name__ == "__main__":
+    print("=== Filtro Promedio Secuencial (Python puro) ===")
+
+    try:
+        n = int(input("Ingrese el tamaño del kernel (impar): "))
+    except:
+        n = 3
+
+    if n % 2 == 0:
+        print("Kernel par detectado, usando 3x3.")
+        n = 3
+
+    # Cargar imagen
+    gray, w, h = cargar_imagen_gris("original.jpg")
+
+    # Crear kernel promedio
+    kernel = generar_kernel_promedio(n)
+
+    # Ejecutar filtro
+    t0 = perf_counter()
+    out_img = promedio_puro(gray, kernel)
+    t1 = perf_counter()
+
+    print(f"\nTiempo Filtro Promedio {n}x{n}: {(t1 - t0)*1000:.2f} ms")
+
+    # Guardar imagen
+    out_name = f"promedio_{n}x{n}.jpg"
+    out_img.save(out_name)
+    print("Imagen guardada como:", out_name)
