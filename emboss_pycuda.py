@@ -27,6 +27,28 @@ def to_grayscale_u8_to_f32(img: Image.Image) -> (List[float], int, int):
                 gray[y*w + x] = 0.299 * r + 0.587 * g + 0.114 * b
     return gray, w, h
 
+def generate_emboss_kernel(k: int) -> List[float]:
+    K = [0.0] * (k * k)
+    diag = k - 1
+    non_zero = 0
+    for i in range(k):
+        for j in range(k):
+            s = i + j
+            idx = i * k + j
+            if s < diag:
+                K[idx] = -1.0
+                non_zero += 1
+            elif s > diag:
+                K[idx] = +1.0
+                non_zero += 1
+            else:
+                K[idx] = 0.0
+    if non_zero > 0:
+        scale = 1.0 / math.sqrt(non_zero)
+        for i in range(k * k):
+            K[i] *= scale
+    return K
+
 def main():
     ap = argparse.ArgumentParser(description="Emboss kxk (GPU con PyCUDA + Pillow).")
     ap.add_argument("input", help="ruta de la imagen de entrada")
@@ -37,6 +59,19 @@ def main():
 
     img = Image.open(args.input)
     gray, w, h = to_grayscale_u8_to_f32(img)
+
+    ksize = args.mask
+    if ksize <= 0:
+        try:
+            ksize = int(input("Ingrese tamaño IMPAR del kernel (ej. 3, 9, 21, 65): ").strip())
+        except Exception:
+            print("Entrada inválida.")
+            return
+    if ksize < 3 or (ksize % 2 == 0):
+        print("Error: el tamaño debe ser impar y >= 3.")
+        return
+
+    K = generate_emboss_kernel(ksize)
 
 if __name__ == "__main__":
     main()
