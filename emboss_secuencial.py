@@ -29,6 +29,33 @@ def to_grayscale_u8_to_f32(img: Image.Image) -> (List[float], int, int):
                 gray[y*w + x] = 0.299 * r + 0.587 * g + 0.114 * b
     return gray, w, h
 
+def generate_emboss_kernel(k: int) -> List[float]:
+    """
+    Kernel k×k estilo C++:
+      -1 en valores por encima de la diagonal principal,
+      +1 por debajo, 0 en la diagonal.
+    Escala por 1/sqrt(nonZero).
+    """
+    K = [0.0] * (k * k)
+    diag = k - 1
+    non_zero = 0
+    for i in range(k):
+        for j in range(k):
+            s = i + j
+            idx = i * k + j
+            if s < diag:
+                K[idx] = -1.0
+                non_zero += 1
+            elif s > diag:
+                K[idx] = +1.0
+                non_zero += 1
+            else:
+                K[idx] = 0.0
+    if non_zero > 0:
+        scale = 1.0 / math.sqrt(non_zero)
+        for i in range(k * k):
+            K[i] *= scale
+    return K
 
 def main():
     ap = argparse.ArgumentParser(description="Emboss kxk (Python puro + Pillow, sin NumPy).")
