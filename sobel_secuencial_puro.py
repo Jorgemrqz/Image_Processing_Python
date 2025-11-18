@@ -1,0 +1,135 @@
+# sobel_secuencial_puro.py
+
+from PIL import Image
+from time import perf_counter
+import warnings
+import math
+
+warnings.simplefilter('ignore', Image.DecompressionBombWarning)
+
+
+# -------------------------------------------
+# Cargar imagen como matriz 2D en escala de grises
+# -------------------------------------------
+def cargar_imagen_gris(ruta):
+    img = Image.open(ruta).convert("L")
+    w, h = img.size
+    pix = img.load()
+
+    gray = [[0 for _ in range(w)] for _ in range(h)]
+    for y in range(h):
+        for x in range(w):
+            gray[y][x] = pix[x, y]
+    return gray, w, h
+
+
+# -------------------------------------------
+# Generar máscara Sobel dinámica
+# -------------------------------------------
+def generar_mascara_sobel(n):
+    if n % 2 == 0:
+        raise ValueError("El tamaño de la máscara debe ser impar (3, 5, 7, 9...).")
+
+    c = n // 2
+    gx = [[0.0 for _ in range(n)] for _ in range(n)]
+    gy = [[0.0 for _ in range(n)] for _ in range(n)]
+
+    for i in range(n):
+        for j in range(n):
+            gx[i][j] = (j - c) * (abs(i - c) + 1)
+            gy[i][j] = (i - c) * (abs(j - c) + 1)
+
+    print(f"Usando máscara Sobel {n}x{n}.")
+    return gx, gy
+
+
+# -------------------------------------------
+# Aplicar Sobel
+# -------------------------------------------
+def sobel_puro(gray, Kx, Ky):
+    h = len(gray)
+    w = len(gray[0])
+    n = len(Kx)
+    pad = n // 2
+
+    # Padding replicando el borde
+    ph = h + 2 * pad
+    pw = w + 2 * pad
+    padded = [[0.0 for _ in range(pw)] for _ in range(ph)]
+
+    for y in range(ph):
+        for x in range(pw):
+            oy = min(max(y - pad, 0), h - 1)
+            ox = min(max(x - pad, 0), w - 1)
+            padded[y][x] = float(gray[oy][ox])
+
+    magnitud = [[0.0 for _ in range(w)] for _ in range(h)]
+    max_mag = 0.0
+
+    # Convolución Sobel
+    for y in range(h):
+        for x in range(w):
+            gx_sum = 0.0
+            gy_sum = 0.0
+            for i in range(n):
+                for j in range(n):
+                    val = padded[y + i][x + j]
+                    gx_sum += val * Kx[i][j]
+                    gy_sum += val * Ky[i][j]
+            g = math.sqrt(gx_sum * gx_sum + gy_sum * gy_sum)
+            magnitud[y][x] = g
+
+            if g > max_mag:
+                max_mag = g
+
+    if max_mag == 0:
+        max_mag = 1.0
+
+    # Normalización y creación de imagen final
+    out = Image.new("L", (w, h))
+    p = out.load()
+
+    for y in range(h):
+        for x in range(w):
+            v = int(magnitud[y][x] * 255.0 / max_mag)
+            p[x, y] = max(0, min(255, v))
+
+    return out
+
+
+# -------------------------------------------
+# main()
+# -------------------------------------------
+def main():
+    print("=== Filtro Sobel Secuencial (Python puro) ===")
+
+    try:
+        n = int(input("Ingrese el tamaño de la máscara (impar): ").strip())
+    except:
+        n = 3
+
+    if n % 2 == 0:
+        print("Entrada inválida, usando n = 3.")
+        n = 3
+
+    # Cargar imagen
+    gray, w, h = cargar_imagen_gris("original.jpg")
+
+    # Máscaras Sobel dinámicas
+    Kx, Ky = generar_mascara_sobel(n)
+
+    # Medición del tiempo
+    t0 = perf_counter()
+    sob_img = sobel_puro(gray, Kx, Ky)
+    t1 = perf_counter()
+
+    print(f"\nTiempo Sobel {n}x{n}: {(t1 - t0) * 1000:.2f} ms")
+
+    # Guardar salida
+    out_name = f"sobel_{n}x{n}.jpg"
+    sob_img.save(out_name)
+    print(f"Imagen guardada como: {out_name}")
+
+
+if __name__ == "__main__":
+    main()
