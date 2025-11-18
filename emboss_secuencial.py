@@ -74,6 +74,23 @@ def convolve_gray(inbuf: List[float], w: int, h: int, K: List[float], ksize: int
             out[y*w + x] = acc
     return out
 
+def save_gray_u8(path: str, src_f32: List[float], w: int, h: int, offset: int, quality: int = 95):
+    # convierte a L (8-bit), suma offset y satura
+    out = Image.new("L", (w, h))
+    pix = out.load()
+    i = 0
+    for y in range(h):
+        for x in range(w):
+            iv = int(round(src_f32[i])) + offset
+            iv = 0 if iv < 0 else 255 if iv > 255 else iv
+            pix[x, y] = iv
+            i += 1
+    # JPG o PNG según extensión
+    if path.lower().endswith(".jpg") or path.lower().endswith(".jpeg"):
+        out.save(path, quality=quality, subsampling=0)
+    else:
+        out.save(path)
+
 def main():
     ap = argparse.ArgumentParser(description="Emboss kxk (Python puro + Pillow, sin NumPy).")
     ap.add_argument("input", help="ruta de la imagen de entrada")
@@ -82,8 +99,39 @@ def main():
     ap.add_argument("--offset", type=int, default=OFFSET_DEFAULT, help="offset a sumar (default 128)")
     args = ap.parse_args()
 
+    # Leer imagen (fuera de la medición)
     img = Image.open(args.input)
     gray, w, h = to_grayscale_u8_to_f32(img)
+
+    # Pedir máscara por teclado si no se pasó por parámetro
+    ksize = args.mask
+    if ksize <= 0:
+        try:
+            ksize = int(input("Ingrese tamaño IMPAR del kernel (ej. 3, 9, 21, 65): ").strip())
+        except Exception:
+            print("Entrada inválida.")
+            return
+    if ksize < 3 or (ksize % 2 == 0):
+        print("Error: el tamaño debe ser impar y >= 3.")
+        return
+
+    K = generate_emboss_kernel(ksize)
+
+    t0 = perf_counter()
+    out_f32 = convolve_gray(gray, w, h, K, ksize)
+    t1 = perf_counter()
+
+    # Guardar (fuera de la medición)
+    out_path = args.output or (args.input.rsplit(".", 1)[0] + f"_emboss_k{ksize}.png")
+    save_gray_u8(out_path, out_f32, w, h, args.offset, quality=95)
+
+    # Reporte
+    print("\n--- RESUMEN (Emboss Python puro) ---")
+    print(f"Imagen: {w}x{h}")
+    print(f"Kernel: {ksize}x{ksize} (directo, O(K^2))")
+    print(f"Offset: {args.offset}")
+    print(f"Tiempo SOLO convolución: {t1 - t0:.6f} s")
+    print(f"Salida: {out_path}")
 
 if __name__ == "__main__":
     main()
