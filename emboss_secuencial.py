@@ -57,6 +57,23 @@ def generate_emboss_kernel(k: int) -> List[float]:
             K[i] *= scale
     return K
 
+def convolve_gray(inbuf: List[float], w: int, h: int, K: List[float], ksize: int) -> List[float]:
+    """ Convolución 2D directa (k×k) con bordes clamp. """
+    r = ksize // 2
+    out = [0.0] * (w * h)
+    for y in range(h):
+        for x in range(w):
+            acc = 0.0
+            for ky in range(-r, r + 1):
+                yy = clamp_i(y + ky, 0, h - 1)
+                krow = (ky + r) * ksize
+                row_off = yy * w
+                for kx in range(-r, r + 1):
+                    xx = clamp_i(x + kx, 0, w - 1)
+                    acc += inbuf[row_off + xx] * K[krow + (kx + r)]
+            out[y*w + x] = acc
+    return out
+
 def main():
     ap = argparse.ArgumentParser(description="Emboss kxk (Python puro + Pillow, sin NumPy).")
     ap.add_argument("input", help="ruta de la imagen de entrada")
