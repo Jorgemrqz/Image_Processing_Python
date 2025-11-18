@@ -146,6 +146,18 @@ def convolve_gray_gpu(gray: List[float], w: int, h: int,
 
     return out_np.tolist(), kernel_ms / 1000.0
 
+def save_gray_u8(path, src_f32, w, h, offset, quality=95):
+    out = Image.new("L", (w,h))
+    pix = out.load()
+    i = 0
+    for y in range(h):
+        for x in range(w):
+            v = int(round(src_f32[i])) + offset
+            v = 0 if v<0 else 255 if v>255 else v
+            pix[x,y] = v
+            i+=1
+    out.save(path)
+
 def main():
     ap = argparse.ArgumentParser(description="Emboss kxk (GPU con PyCUDA + Pillow).")
     ap.add_argument("input", help="ruta de la imagen de entrada")
@@ -169,6 +181,20 @@ def main():
         return
 
     K = generate_emboss_kernel(ksize)
+
+    t0 = perf_counter()
+    out_f32, kernel_s = convolve_gray_gpu(gray, w, h, K, ksize)
+    t1 = perf_counter()
+
+    out_path = args.output or args.input.replace(".jpg", f"_emboss_gpu_k{ksize}.png")
+    save_gray_u8(out_path, out_f32, w, h, args.offset)
+
+    print("\n--- RESUMEN EMBOSS GPU ---")
+    print(f"Imagen: {w}x{h}")
+    print(f"Kernel: {ksize}x{ksize}")
+    print(f"Tiempo SOLO kernel GPU: {kernel_s:.6f} s")
+    print(f"Tiempo total Python: {(t1-t0):.6f} s")
+    print(f"Salida: {out_path}")
 
 if __name__ == "__main__":
     main()
