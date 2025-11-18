@@ -30,8 +30,6 @@ def cargar_imagen_gris(ruta):
             gray[y][x] = pix[x, y]
 
     return gray, w, h
-
-
 # -------------------------------------------------
 # Filtro promedio Python puro
 # -------------------------------------------------
@@ -105,3 +103,4 @@ if __name__ == "__main__":
     out_name = f"promedio_{n}x{n}.jpg"
     out_img.save(out_name)
     print("Imagen guardada como:", out_name)
+
