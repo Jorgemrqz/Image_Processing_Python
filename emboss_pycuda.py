@@ -4,6 +4,12 @@ from typing import List
 from PIL import Image
 import math
 
+import numpy as np
+import pycuda.autoinit
+import pycuda.driver as cuda
+from pycuda.compiler import SourceModule
+
+
 OFFSET_DEFAULT = 128
 
 def clamp_i(v: int, lo: int, hi: int) -> int:
@@ -48,6 +54,97 @@ def generate_emboss_kernel(k: int) -> List[float]:
         for i in range(k * k):
             K[i] *= scale
     return K
+
+CUDA_SRC = r"""
+extern "C"
+__global__ void convolve_gray_gpu(
+    const float *inbuf,
+    float *outbuf,
+    const float *K,
+    int w,
+    int h,
+    int ksize
+){
+    int x = blockIdx.x * blockDim.x + threadIdx.x;
+    int y = blockIdx.y * blockDim.y + threadIdx.y;
+
+    if (x >= w || y >= h) return;
+
+    int r = ksize / 2;
+    float acc = 0.0f;
+
+    for (int ky = -r; ky <= r; ++ky) {
+        int yy = y + ky;
+        if (yy < 0) yy = 0;
+        else if (yy >= h) yy = h - 1;
+
+        int krow = (ky + r) * ksize;
+        int row_off = yy * w;
+
+        for (int kx = -r; kx <= r; ++kx) {
+            int xx = x + kx;
+            if (xx < 0) xx = 0;
+            else if (xx >= w) xx = w - 1;
+
+            float val = inbuf[row_off + xx];
+            float kval = K[krow + (kx + r)];
+            acc += val * kval;
+        }
+    }
+
+    outbuf[y * w + x] = acc;
+}
+""";
+
+mod = SourceModule(CUDA_SRC)
+convolve_gray_gpu_kernel = mod.get_function("convolve_gray_gpu")
+
+def convolve_gray_gpu(gray: List[float], w: int, h: int,
+                      K: List[float], ksize: int):
+    """Convolución emboss ejecutada completamente en GPU."""
+    gray_np = np.asarray(gray, dtype=np.float32)
+    K_np = np.asarray(K, dtype=np.float32)
+
+    d_in = cuda.mem_alloc(gray_np.nbytes)
+    d_out = cuda.mem_alloc(gray_np.nbytes)
+    d_K = cuda.mem_alloc(K_np.nbytes)
+
+    cuda.memcpy_htod(d_in, gray_np)
+    cuda.memcpy_htod(d_K, K_np)
+
+    block_x, block_y = 16, 16
+    grid_x = (w + block_x - 1) // block_x
+    grid_y = (h + block_y - 1) // block_y
+
+    start_evt = cuda.Event()
+    end_evt = cuda.Event()
+
+    start_evt.record()
+
+    convolve_gray_gpu_kernel(
+        d_in,
+        d_out,
+        d_K,
+        np.int32(w),
+        np.int32(h),
+        np.int32(ksize),
+        block=(block_x, block_y, 1),
+        grid=(grid_x, grid_y, 1),
+    )
+
+    end_evt.record()
+    end_evt.synchronize()
+
+    kernel_ms = start_evt.time_till(end_evt)
+
+    out_np = np.empty_like(gray_np)
+    cuda.memcpy_dtoh(out_np, d_out)
+
+    d_in.free()
+    d_out.free()
+    d_K.free()
+
+    return out_np.tolist(), kernel_ms / 1000.0
 
 def main():
     ap = argparse.ArgumentParser(description="Emboss kxk (GPU con PyCUDA + Pillow).")
